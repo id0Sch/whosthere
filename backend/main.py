@@ -13,9 +13,19 @@
 # limitations under the License.
 
 from bottle import Bottle, request
+from google.cloud import bigquery
+from os import environ
 import logging
 
 app = Bottle()
+dataset_name = environ['DATASET_NAME']
+table_name = environ['TABLE_NAME']
+project = environ['project']
+
+bigquery_client = bigquery.Client(project=project)
+dataset = bigquery_client.dataset(dataset_name)
+table = dataset.table(table_name)
+table.reload()
 
 
 @app.route('/', method="GET")
@@ -26,5 +36,12 @@ def the_get():
 @app.route('/', method="POST")
 def the_post():
     res = request.body.read().split(',')
+
+    errors = table.insert_data(res)
+
     logging.debug(res)
-    return res
+    if not errors:
+        return 'Loaded {} rows table'.format(res.__len__)
+    else:
+        logging.error(errors)
+        return errors

@@ -11,37 +11,86 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from bottle import Bottle, request
-from google.cloud import bigquery
-from os import environ
+import json
 import logging
+from time import time
+from os import environ
+from bottle import Bottle, request
+from datetime import datetime as dt
+import google.cloud.bigquery as bigquery
+from google.appengine.api.app_identity import get_application_id
 
 app = Bottle()
 dataset_name = environ['DATASET_NAME']
-table_name = environ['TABLE_NAME']
-project = environ['project']
 
+project = get_application_id()
 bigquery_client = bigquery.Client(project=project)
 dataset = bigquery_client.dataset(dataset_name)
-table = dataset.table(table_name)
-table.reload()
+
+raw_table = dataset.table('raw')
+raw_table.reload()
+
+mac_to_owner_table = dataset.table('mac_to_owner')
+mac_to_owner_table.reload()
 
 
-@app.route('/', method="GET")
-def the_get():
-    return "result"
+@app.route('/report', method="POST")
+def report():
+    res = request.json
+    addresses = []
 
+    now = dt.fromtimestamp(time()).strftime('%Y-%m-%d %H:%M:%S')
 
-@app.route('/', method="POST")
-def the_post():
-    res = request.body.read().split(',')
+    for [ip, mac] in res:
+        addresses.append([mac, ip, now])
 
-    errors = table.insert_data(res)
-
+    errors = raw_table.insert_data(addresses)
     logging.debug(res)
     if not errors:
-        return 'Loaded {} rows table'.format(res.__len__)
+        return 'Loaded {} addresses'.format(str(addresses.__len__()))
     else:
         logging.error(errors)
         return errors
+
+
+@app.route('/pair', method="POST")
+def pair():
+    res = request.json
+    logging.debug('{} {}'.format(res['mac_address'], res['email']))
+
+    errors = mac_to_owner_table.insert_data([[res['mac_address'], res['email']]])
+    if not errors:
+        return 'Paired Successfully'
+    else:
+        logging.error(errors)
+        return errors
+
+
+@app.route('/addresses', method="GET")
+def get_addresses():
+    query = """
+    #standardSQL
+    SELECT raw.mac_address, 
+      owner.email, 
+      max(local_ip) as last_seen_ip_address, 
+      max(timestamp) as last_seen_timestamp,
+      count(raw.mac_address) as occurences 
+      FROM `"""+dataset_name+""".raw` as raw 
+      LEFT JOIN `"""+dataset_name+""".mac_to_owner` as owner ON owner.mac_address = raw.mac_address 
+      GROUP by raw.mac_address,owner.email
+      ORDER BY occurences desc
+    """
+
+    query_job = bigquery_client.run_sync_query(query)
+    query_job.run()
+
+    field_names = [f.name for f in query_job.schema]
+
+    try:
+        res = []
+        for row in query_job.rows:
+            zipped_results = zip(field_names, row)
+            res.append({x[0]: str(x[1]) for x in zipped_results})
+    except IndexError:
+        res = None
+    return json.dumps(res)

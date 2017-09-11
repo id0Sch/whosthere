@@ -1,2 +1,2 @@
-bottle==
-google.cloud==
+bottle>=0.4.3
+google-cloud-bigquery==0.25.0

@@ -17,7 +17,7 @@ def create_dataset(dataset_name, project=None):
         print 'dataset exists'
 
 
-def create_table(dataset_name, table_name, project=None):
+def create_table(dataset_name, table_name, schema, project=None):
     """Creates a simple table in the given dataset.
 
     If no project is specified, then the currently active project is used.
@@ -31,15 +31,13 @@ def create_table(dataset_name, table_name, project=None):
 
     table = dataset.table(table_name)
 
-    # Set the table schema
-    table.schema = (
-        bigquery.SchemaField('Address', 'STRING'),
-        bigquery.SchemaField('timestamp', 'TIMESTAMP')
-    )
+    if not table.exists():
+        # Set the table schema
+        table.schema = schema
 
-    table.create()
+        table.create()
 
-    print('Created table {} in dataset {}.'.format(table_name, dataset_name))
+        print('Created table {} in dataset {}.'.format(table_name, dataset_name))
 
 
 def list_tables(dataset_name, project=None):
@@ -59,8 +57,19 @@ def list_tables(dataset_name, project=None):
 
 if __name__ == '__main__':
     dataset_name = environ['DATASET_NAME']
-    table_name = environ['TABLE_NAME']
     project = environ['PROJECT_ID']
 
     create_dataset(dataset_name, project)
-    create_table(dataset_name, table_name, project)
+
+    raw_schema = (
+        bigquery.SchemaField('mac_address', 'STRING'),
+        bigquery.SchemaField('local_ip', 'STRING'),
+        bigquery.SchemaField('timestamp', 'TIMESTAMP')
+    )
+    mac_to_owner_schema = (
+        bigquery.SchemaField('mac_address', 'STRING'),
+        bigquery.SchemaField('email', 'STRING')
+    )
+
+    create_table(dataset_name=dataset_name, table_name='raw', project=project, schema=raw_schema)
+    create_table(dataset_name=dataset_name, table_name='mac_to_owner', project=project, schema=mac_to_owner_schema)

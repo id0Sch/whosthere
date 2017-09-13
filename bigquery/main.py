@@ -68,7 +68,7 @@ if __name__ == '__main__':
     )
     mac_to_owner_schema = (
         bigquery.SchemaField('mac_address', 'STRING'),
-        bigquery.SchemaField('email', 'STRING')
+        bigquery.SchemaField('email', 'STRING'),
     )
 
     create_table(dataset_name=dataset_name, table_name='raw', project=project, schema=raw_schema)

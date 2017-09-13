@@ -1,2 +1,6 @@
 whos-there*.json
 */lib
+.idea
+dist
+node_modules
+/webpack_cache/
